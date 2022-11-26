@@ -1,6 +1,6 @@
 ## MAP & the growth of soil microbes (16S qSIP) 
 
-This repo contains code necessary to perform primary qSIP calculations used in "Active Populations and the growth of soil microorganisms are framed by mean annual precipitation"  
+This repo contains code necessary to perform primary qSIP calculations used in ["Active Populations and the growth of soil microorganisms are framed by mean annual precipitation"](https://doi.org/10.1016/j.soilbio.2022.108886) 
 
 ## Experiment overview  
 
