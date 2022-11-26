@@ -8,8 +8,11 @@ In this experiment we collected soils from three annual grasslands in California
 
 ## Scripts  
   
-* Data_preparation formats 16S seq data and incubation data so that it is compatible with the qSIP pipeline
-* qSIP_calculations performs taxon filtering and computes EAF <sup>18</sup>O for bacterial ASVs at each site.
+1. Data_preparation formats 16S seq data and incubation data so that it is compatible with the qSIP pipeline. 
+https://htmlpreview.github.io/?https://github.com/mmf289/MAP-and-microbial-growth/blob/main/docs/Data_preparation.html
+
+2. qSIP_calculations performs taxon filtering and computes EAF <sup>18</sup>O for bacterial ASVs at each site.  
+https://htmlpreview.github.io/?https://github.com/mmf289/MAP-and-microbial-growth/blob/main/docs/qSIP_calculations.html
 
 ## Citations
 
