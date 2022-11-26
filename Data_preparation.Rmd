@@ -1,0 +1,131 @@
+---
+author: "Megan Foley"
+date: '2022-06-22'
+output: html_document
+---
+### Formatting data for qSIP analysis
+First script of qSIP calculations used in "Active populations and growth of soil microorganisms are framed by mean annual precipitation in three California annual grasslands". I'm mostly following the protocol outlined here:
+
+>Finley, B.K. et al. (2019). Microbial Taxon-Specific Isotope Incorporation with DNA Quantitative Stable Isotope Probing. In: Dumont, M., Hernández García, M. (eds) Stable Isotope Probing. Methods in Molecular Biology, vol 2046. Humana, New York, NY. (https://doi.org/10.1007/978-1-4939-9721-3_11)
+       
+#### Load ASV table, sample info, and lab data
+* ASV table: matrix that gives the number of reads per sample per ASV. Here, each sample is a density fraction.    
+* Sample info: matrix containing metadata sample ID's such as the experimental treatment (in this study - the name of the field site), isotope addition (16O or 18O), replicate number, fraction number, and tube number.    
+* Lab data: matrix containing sample ID, average density of the sample (since each sample is a fraction this is AKA the average density of the fraction), and DNA concentration of the sample. This may also contain the number of 16S or ITS gene copies estimated via qPCR for each sample.    
+  
+```{r, message=FALSE, warning=FALSE, results='hold'}
+setwd("~/Documents/winterSIP/wintersip submission/markdowns")
+library(vegan)
+library(dplyr)
+library(data.table)
+library(kableExtra)
+
+options(knitr.table.format = "html")
+
+asv_table<-read.delim("data/sip_table.txt") #microbial counts
+sample_info<-read.table("data/sample_data.csv", header=TRUE, sep=",")
+lab_data<-read.table("data/lab_data_corrected.csv", header=TRUE, sep=",")
+
+asv_table[1:5,1:5] %>% kbl(caption = "ASV table") %>% kable_styling()
+head(sample_info) %>% kbl(caption = "Sample info") %>% kable_styling()
+head(lab_data) %>% kbl(caption = "Lab data") %>% kable_styling()
+```
+          
+          
+#### Convert ASV count data to relative abundance & reformat (transpose) 
+  
+  
+```{r, message=FALSE, warning=FALSE, results='hold'}
+asv_table<-decostand(asv_table, method="total", MARGIN=2)
+asv_table<-data.frame(t(asv_table))
+asv_table[1:5,1:5] %>% kbl(caption = "ASV table - reformatted") %>% kable_styling()
+```
+      
+            
+#### Create column "AVG_16S_COPIES" in the lab data 
+This study uses the average DNA concentration in a fraction (instead of 16S gene copy number) to normalize the relative abundance of taxa across fractions. qSIP functions require the variable for normalizing to be named "AVG_16S_COPIES" so we will create a column here with that name and fill it with values for total DNA concentration.  
+  
+I will also make some minor formatting changes: 
+
+* Add "sample" col to ASV table for merging step   
+* Change the sample IDs in the lab_data matrix to match those in ASV table and sample_info for merging step   
+  
+```{r, message=FALSE, warning=FALSE}
+lab_data$Total_16S_copies<- lab_data$avg_fraction_DNA.ng_ul
+asv_table$sample<-row.names(asv_table)
+lab_data$sample<-gsub('_', '.', lab_data$sample) #standardize sample ID's
+```
+  
+  
+#### Create table 1 by combining sample data, lab data, and  ASV table  
+We will also make some formatting changes to table 1: 
+
+* We will drop some extraneous data from table1 that we won't need moving forward (site, fraction_total_DNA, date, well, sample, rep.volume.ul, buffer)  
+* We will create a column called "Soil_Isotope" which identifies experiment treatment (site & isotope) of each sample  
+    * For this experiment, "Soil_Isotope" will be one of the following:  
+        * "Angelo_16O", "Angelo_18O", "Hopland_16O", "Hopland_18O", "Sedgwick_16O", or "Sedgwick_18O"  
+* We will change the col names of table1 so they're compative with qSIP functions  
+  
+  
+```{r, message=FALSE, warning=FALSE}
+table1 <- merge(sample_info,
+                  lab_data,
+                  by="sample")
+
+table1 <- merge(table1,
+                  asv_table,
+                  by="sample")
+
+##now formatting changes
+
+#Create Soil_Isotope column
+table1$Soil_Isotope<-paste(table1$site, table1$isotope, sep="_")
+
+#Drop extraneous lab data
+table1<-table1 %>%
+  select(-site, -fraction_total_DNA.ng, -date, -well, -sample, -rep, -volume.ul, -buffer, -sample_info)
+
+#Edit colnames so that they work with Ben's code later on
+setnames(table1, old=c("isotope", "fraction", "tube", "tube_fraction", "avg_fraction_density.g_ml", "avg_fraction_DNA.ng_ul"), new=c("Isotope_Treatment", "Fraction", "Tube", "Sample_ID", "Density_g_ml", "DNA_ng_ul"))
+
+table1[1:5,1:12] %>% kbl(caption = "Table 1") %>% kable_styling()
+```
+   
+        
+#### Calculate the total number of 16S rRNA gene copies per fraction for each ASV  
+* We are also going to rename Table1 to data.rel to keep everything in line with existing protocols  
+* This step is Eq. 1 in Hungate et al., 2015 
+  
+```{r, message=FALSE, warning=FALSE}
+#reorder columns
+data.rel<- table1 %>%
+  select("Sample_ID","Isotope_Treatment", "Tube", "Fraction", "Soil_Isotope", "Density_g_ml", "DNA_ng_ul", "Total_16S_copies", everything())
+
+#multiply DNA concentration by relative abundance to normalize
+data.copies<- data.rel$Total_16S_copies * data.rel[,9:(ncol(data.rel))]
+data.copies<-cbind(data.rel[,1:8], data.copies)
+```
+
+        
+#### Format data.rel (relative abundance data) and data.copies (total gene copy data) from wide -> long & merge together and save for input in next script
+   
+```{r, message=FALSE, warning=FALSE, results='hold'}
+data.rel.melted<-melt(data.rel, id=c("Sample_ID","Isotope_Treatment", "Tube",
+                                     "Fraction", "Soil_Isotope", "Density_g_ml",
+                                     "DNA_ng_ul", "Total_16S_copies"),
+                      variable.name = "taxon",
+                      value.name = "rel.abundance")
+
+data.copies.melted <- melt(data.copies, id=c("Sample_ID","Isotope_Treatment", "Tube",
+                                             "Fraction", "Soil_Isotope","Density_g_ml",
+                                             "DNA_ng_ul","Total_16S_copies"),
+                           variable.name = "taxon",
+                           value.name = "copies.ul")
+
+data.melted <- merge(data.copies.melted, data.rel.melted)
+head(data.melted) %>% kbl(caption = "Data.melted") %>% kable_styling()
+
+write.csv(data.melted, "input_data/data.melted.csv")
+```
+
+>Data is now formatted for use with qSIP functions (https://bitbucket.org/QuantitativeSIP/qsip_repo/src/master/)
